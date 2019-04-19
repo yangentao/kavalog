@@ -66,7 +66,7 @@ object Yog {
 
 	fun e(vararg args: Any?) {
 		printMessage(LogLevel.ERROR, *args)
-		defaultPrinter?.flush()
+		this.flush()
 	}
 
 	fun i(vararg args: Any?) {
