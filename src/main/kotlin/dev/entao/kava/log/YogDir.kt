@@ -81,7 +81,7 @@ class YogDir(
         }
     }
 
-    override fun printLine(level: LogLevel, msg: String) {
+    override fun printLine(level: YogLevel, msg: String) {
         val w = out ?: return
         val s = Yog.formatMsg(level, msg)
         try {

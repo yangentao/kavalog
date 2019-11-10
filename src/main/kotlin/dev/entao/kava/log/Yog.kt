@@ -12,18 +12,18 @@ import kotlin.collections.HashMap
 /**
  * Created by entaoyang@163.com on 2018/11/8.
  */
-enum class LogLevel(val n: Int) {
+enum class YogLevel(val n: Int) {
 
 	DISABLE(0), DEBUG(1), INFO(2), WARN(3), ERROR(4), FATAIL(5);
 
 	//>=
-	fun ge(level: LogLevel): Boolean {
+	fun ge(level: YogLevel): Boolean {
 		return this.ordinal >= level.ordinal
 	}
 }
 
 object Yog {
-	var level = LogLevel.DEBUG
+	var level = YogLevel.DEBUG
 	var defaultPrinter: YogPrinter? = YogConsole()
 	val tagPrinters = HashMap<String, YogPrinter>()
 
@@ -57,20 +57,20 @@ object Yog {
 	}
 
 	fun d(vararg args: Any?) {
-		printMessage(LogLevel.DEBUG, *args)
+		printMessage(YogLevel.DEBUG, *args)
 	}
 
 	fun w(vararg args: Any?) {
-		printMessage(LogLevel.WARN, *args)
+		printMessage(YogLevel.WARN, *args)
 	}
 
 	fun e(vararg args: Any?) {
-		printMessage(LogLevel.ERROR, *args)
+		printMessage(YogLevel.ERROR, *args)
 		this.flush()
 	}
 
 	fun i(vararg args: Any?) {
-		printMessage(LogLevel.INFO, *args)
+		printMessage(YogLevel.INFO, *args)
 	}
 
 	fun fatal(vararg args: Any?) {
@@ -78,7 +78,7 @@ object Yog {
 		throw RuntimeException("fatal error!")
 	}
 
-	fun formatMsg(level: LogLevel, msg: String): String {
+	fun formatMsg(level: YogLevel, msg: String): String {
 		val sb = StringBuilder(msg.length + 64)
 		val date = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(System.currentTimeMillis()))
 		sb.append(date)
@@ -90,7 +90,7 @@ object Yog {
 	}
 
 	@Synchronized
-	fun printMessage(level: LogLevel, vararg args: Any?) {
+	fun printMessage(level: YogLevel, vararg args: Any?) {
 		if (level.ge(Yog.level)) {
 			val s: String = args.joinToString(" ") {
 				toLogString(it)
@@ -144,7 +144,7 @@ object Yog {
 
 interface YogPrinter {
 	fun flush()
-	fun printLine(level: LogLevel, msg: String)
+	fun printLine(level: YogLevel, msg: String)
 	fun uninstall() {
 
 	}
@@ -161,7 +161,7 @@ class YogTree(vararg ps: YogPrinter) : YogPrinter {
 		all.forEach { it.flush() }
 	}
 
-	override fun printLine(level: LogLevel, msg: String) {
+	override fun printLine(level: YogLevel, msg: String) {
 		all.forEach { it.printLine(level, msg) }
 	}
 
@@ -173,7 +173,7 @@ class YogTree(vararg ps: YogPrinter) : YogPrinter {
 }
 
 class YogConsole : YogPrinter {
-	override fun printLine(level: LogLevel, msg: String) {
+	override fun printLine(level: YogLevel, msg: String) {
 		val s = Yog.formatMsg(level, msg)
 		println(s)
 	}
