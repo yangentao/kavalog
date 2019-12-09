@@ -6,6 +6,7 @@ import java.io.FileWriter
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.collections.HashMap
 
 /**
  * Created by entaoyang@163.com on 2016-10-28.
@@ -13,92 +14,117 @@ import java.util.*
 
 @Suppress("unused")
 class YogDir(
-		private val logdir: File,
-		private val keepDays: Int,
-		private val prefix: String = "yog",
-		private val ext: String = ".log"
+    private val logdir: File,
+    private val keepDays: Int,
+    private val prefix: String = "yog",
+    private val ext: String = ".log",
+    private val tagSeprateFile: Boolean = false
 ) : YogPrinter {
 
+    private val mapWriter = HashMap<String, BufferedWriter>()
+    private val mapDay = HashMap<String, Int>()
 
-	private var writer: BufferedWriter? = null
-	private var dateStr: String = ""
-	private var dayYear: Int = -1
-	private var preTime: Long = System.currentTimeMillis()
-	private var flushTime: Long = 10 * 1000  // 10s flush一次
+    private var installed = false
 
-	init {
-		if (!logdir.exists()) {
-			logdir.mkdirs()
-			logdir.mkdir()
-		}
-	}
+    private var KEY_DEF = "YOG"
 
-	private val out: BufferedWriter?
-		get() {
-			val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-			if (dayOfYear == this.dayYear) {
-				return writer
-			}
-			val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-			val ds = fmt.format(Date(System.currentTimeMillis()))
-			writer?.flush()
-			writer?.close()
-			writer = null
-			dateStr = ds
-			deleteOldLogs()
-			try {
-				writer = BufferedWriter(FileWriter(File(logdir, "$prefix$dateStr$ext"), true), 32 * 1024)
-			} catch (ex: IOException) {
-				ex.printStackTrace()
-			}
-			return writer
-		}
+    init {
+        if (!logdir.exists()) {
+            logdir.mkdirs()
+            logdir.mkdir()
+        }
+    }
 
-	private fun deleteOldLogs() {
-		var n = keepDays
-		if (n < 1) {
-			n = 1
-		}
-		val fs = logdir.listFiles() ?: return
-		val ls = fs.filter { it.name.endsWith(ext) && it.name.startsWith(prefix) }.sortedByDescending { it.name }
-		if (ls.size > n + 1) {
-			for (i in (n + 1) until ls.size) {
-				ls[i].delete()
-			}
-		}
-	}
+    @Synchronized
+    override fun install() {
+        installed = true
+    }
 
-	override fun uninstall() {
-		out?.flush()
-		out?.close()
-		writer = null
-	}
+    @Synchronized
+    override fun uninstall() {
+        installed = false
+        val m = HashMap<String, BufferedWriter>(mapWriter)
+        mapWriter.clear()
+        for ((_, v) in m) {
+            v.flush()
+            v.close()
+        }
+        m.clear()
+    }
 
-	override fun flush() {
-		try {
-			out?.flush()
-		} catch (e: Exception) {
-			e.printStackTrace()
-		}
-	}
+    @Synchronized
+    override fun flush() {
+        try {
+            for (e in this.mapWriter) {
+                e.value.flush()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
-	override fun printItem(item: YogItem) {
-		val w = out ?: return
-		try {
-			w.write(item.line)
-			w.write("\n")
-		} catch (e: IOException) {
-			e.printStackTrace()
-		}
-		this.checkFlush()
-	}
+    @Synchronized
+    private fun outOf(tag: String): BufferedWriter? {
+        if (!installed) {
+            return null
+        }
+        val tagKey = if (!tagSeprateFile || tag.isEmpty()) {
+            this.KEY_DEF
+        } else {
+            tag
+        }
+        val dayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+        if (mapDay[tagKey] == dayOfYear) {
+            return mapWriter[tagKey]
+        }
+        var oldW = mapWriter.remove(tagKey)
+        oldW?.flush()
+        oldW?.close()
+        oldW = null
 
-	private fun checkFlush() {
-		val cur = System.currentTimeMillis()
-		if (cur - preTime > flushTime) {
-			flush()
-			preTime = cur
-		}
-	}
+        deleteOldLogs()
 
+        val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val ds = fmt.format(Date(System.currentTimeMillis()))
+
+        val filename: String = if (tagSeprateFile) {
+            "$prefix$ds$tagKey$ext"
+        } else {
+            "$prefix$ds$ext"
+        }
+        try {
+            val writer = BufferedWriter(FileWriter(File(logdir, filename), true), 16 * 1024)
+            mapWriter[tagKey] = writer
+            mapDay[tagKey] = dayOfYear
+            return writer
+        } catch (ex: IOException) {
+            ex.printStackTrace()
+        }
+        return null
+    }
+
+    private fun deleteOldLogs() {
+        var n = keepDays
+        if (n < 1) {
+            n = 1
+        }
+        val fs = logdir.listFiles() ?: return
+        val ls = fs.filter { it.name.endsWith(ext) && it.name.startsWith(prefix) }.sortedByDescending { it.name }
+        if (ls.size > n + 1) {
+            for (i in (n + 1) until ls.size) {
+                ls[i].delete()
+            }
+        }
+    }
+
+
+    override fun printItem(item: YogItem) {
+        val w = outOf(item.tag) ?: return
+        try {
+            w.write(item.line)
+            w.write("\n")
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
 }
